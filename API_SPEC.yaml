@@ -1,0 +1,1509 @@
+openapi: 3.0.3
+info:
+  title: ARgument WebAR Service API
+  description: |
+    REST API для WebAR сервиса с видео-наложением на напечатанные изображения.
+    
+    ## Аутентификация
+    API использует JWT Bearer tokens для аутентификации. Получите токен через `/api/v1/auth/login` 
+    и передавайте его в заголовке `Authorization: Bearer <token>`.
+    
+    ## Rate Limiting
+    - Authenticated users: 100 requests per minute
+    - Anonymous users: 20 requests per minute
+    
+    ## Пагинация
+    Endpoints с списками поддерживают пагинацию через query параметры:
+    - `page` - номер страницы (default: 1)
+    - `limit` - количество элементов (default: 20, max: 100)
+  version: 1.0.0
+  contact:
+    name: ARgument Support
+    email: support@argument.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.argument.io/api/v1
+    description: Production server
+  - url: https://staging-api.argument.io/api/v1
+    description: Staging server
+  - url: http://localhost:3000/api/v1
+    description: Development server
+
+tags:
+  - name: auth
+    description: Аутентификация и авторизация
+  - name: users
+    description: Управление пользователями
+  - name: projects
+    description: Управление проектами
+  - name: images
+    description: Работа с изображениями
+  - name: videos
+    description: Работа с видео
+  - name: markers
+    description: Генерация и управление AR-маркерами
+  - name: links
+    description: Управление WebAR ссылками
+  - name: analytics
+    description: Аналитика и отслеживание
+  - name: admin
+    description: Административные функции
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==================== AUTH ====================
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Регистрация нового пользователя
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: SecurePass123!
+                name:
+                  type: string
+                  minLength: 2
+                  example: John Doe
+                acceptTerms:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Пользователь успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Registration successful. Please check your email to verify your account.
+                  userId:
+                    type: string
+                    format: uuid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email уже используется
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Вход в систему
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                rememberMe:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Обновление access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Токен обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Выход из системы
+      responses:
+        '200':
+          description: Успешный выход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logout successful
+
+  /auth/forgot-password:
+    post:
+      tags: [auth]
+      summary: Запрос на восстановление пароля
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Email отправлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Password reset link sent to your email
+
+  /auth/reset-password:
+    post:
+      tags: [auth]
+      summary: Сброс пароля
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 8
+      responses:
+        '200':
+          description: Пароль успешно изменен
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ==================== USERS ====================
+  /users/me:
+    get:
+      tags: [users]
+      summary: Получить информацию о текущем пользователе
+      responses:
+        '200':
+          description: Информация о пользователе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags: [users]
+      summary: Обновить профиль пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                avatar:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Профиль обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /users/me/quota:
+    get:
+      tags: [users]
+      summary: Получить информацию о квоте пользователя
+      responses:
+        '200':
+          description: Информация о квоте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserQuota'
+
+  # ==================== PROJECTS ====================
+  /projects:
+    get:
+      tags: [projects]
+      summary: Получить список проектов пользователя
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, updatedAt, name, views]
+            default: createdAt
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список проектов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [projects]
+      summary: Создать новый проект
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                  example: My AR Campaign
+                description:
+                  type: string
+                  maxLength: 500
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 10
+                isPublic:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Проект создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /projects/{projectId}:
+    get:
+      tags: [projects]
+      summary: Получить информацию о проекте
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      responses:
+        '200':
+          description: Информация о проекте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [projects]
+      summary: Обновить проект
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+                isPublic:
+                  type: boolean
+      responses:
+        '200':
+          description: Проект обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+    delete:
+      tags: [projects]
+      summary: Удалить проект
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      responses:
+        '204':
+          description: Проект удален
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== IMAGES ====================
+  /images/upload:
+    post:
+      tags: [images]
+      summary: Загрузить изображение
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [projectId, file]
+              properties:
+                projectId:
+                  type: string
+                  format: uuid
+                file:
+                  type: string
+                  format: binary
+                  description: JPEG или PNG файл, макс 10MB
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Изображение загружено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          description: Файл слишком большой
+
+  /images/{imageId}:
+    get:
+      tags: [images]
+      summary: Получить информацию об изображении
+      parameters:
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Информация об изображении
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+
+    delete:
+      tags: [images]
+      summary: Удалить изображение
+      parameters:
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Изображение удалено
+
+  # ==================== VIDEOS ====================
+  /videos/upload:
+    post:
+      tags: [videos]
+      summary: Загрузить видео
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [projectId, file]
+              properties:
+                projectId:
+                  type: string
+                  format: uuid
+                file:
+                  type: string
+                  format: binary
+                  description: MP4, WebM или MOV файл, макс 100MB
+                name:
+                  type: string
+                description:
+                  type: string
+                autoplay:
+                  type: boolean
+                  default: true
+                loop:
+                  type: boolean
+                  default: false
+      responses:
+        '202':
+          description: Видео принято на обработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Video'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /videos/{videoId}:
+    get:
+      tags: [videos]
+      summary: Получить информацию о видео
+      parameters:
+        - name: videoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Информация о видео
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Video'
+
+    delete:
+      tags: [videos]
+      summary: Удалить видео
+      parameters:
+        - name: videoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Видео удалено
+
+  /videos/{videoId}/status:
+    get:
+      tags: [videos]
+      summary: Получить статус обработки видео
+      parameters:
+        - name: videoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Статус обработки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+                  progress:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                  message:
+                    type: string
+
+  # ==================== MARKERS ====================
+  /markers/generate:
+    post:
+      tags: [markers]
+      summary: Сгенерировать AR-маркер из изображения
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageId]
+              properties:
+                imageId:
+                  type: string
+                  format: uuid
+                videoId:
+                  type: string
+                  format: uuid
+                  description: ID видео для привязки к маркеру
+                settings:
+                  type: object
+                  properties:
+                    scale:
+                      type: number
+                      default: 1.0
+                      minimum: 0.1
+                      maximum: 5.0
+                    offsetX:
+                      type: number
+                      default: 0
+                    offsetY:
+                      type: number
+                      default: 0
+                    rotation:
+                      type: number
+                      default: 0
+                      minimum: 0
+                      maximum: 360
+                    opacity:
+                      type: number
+                      default: 1.0
+                      minimum: 0
+                      maximum: 1
+      responses:
+        '201':
+          description: Маркер сгенерирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Marker'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /markers/{markerId}:
+    get:
+      tags: [markers]
+      summary: Получить информацию о маркере
+      parameters:
+        - name: markerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Информация о маркере
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Marker'
+
+    patch:
+      tags: [markers]
+      summary: Обновить настройки маркера
+      parameters:
+        - name: markerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                videoId:
+                  type: string
+                  format: uuid
+                settings:
+                  type: object
+      responses:
+        '200':
+          description: Маркер обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Marker'
+
+    delete:
+      tags: [markers]
+      summary: Удалить маркер
+      parameters:
+        - name: markerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Маркер удален
+
+  # ==================== LINKS ====================
+  /projects/{projectId}/links:
+    get:
+      tags: [links]
+      summary: Получить WebAR ссылки проекта
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      responses:
+        '200':
+          description: Список ссылок
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Link'
+
+    post:
+      tags: [links]
+      summary: Создать новую WebAR ссылку
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [markerId]
+              properties:
+                markerId:
+                  type: string
+                  format: uuid
+                customSlug:
+                  type: string
+                  pattern: '^[a-z0-9-]+$'
+                  minLength: 3
+                  maxLength: 50
+                password:
+                  type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+                maxViews:
+                  type: integer
+                  minimum: 1
+      responses:
+        '201':
+          description: Ссылка создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+
+  /links/{linkId}:
+    get:
+      tags: [links]
+      summary: Получить информацию о ссылке
+      security: []
+      parameters:
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Информация о ссылке (публичные данные)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkPublic'
+
+    patch:
+      tags: [links]
+      summary: Обновить настройки ссылки
+      parameters:
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isActive:
+                  type: boolean
+                password:
+                  type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Ссылка обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+
+    delete:
+      tags: [links]
+      summary: Удалить ссылку
+      parameters:
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Ссылка удалена
+
+  /links/{linkId}/qr:
+    get:
+      tags: [links]
+      summary: Получить QR-код для ссылки
+      parameters:
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 256
+            minimum: 128
+            maximum: 1024
+      responses:
+        '200':
+          description: QR-код
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+
+  # ==================== ANALYTICS ====================
+  /analytics/track:
+    post:
+      tags: [analytics]
+      summary: Отследить событие
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [linkId, eventType, sessionId]
+              properties:
+                linkId:
+                  type: string
+                sessionId:
+                  type: string
+                  format: uuid
+                eventType:
+                  type: string
+                  enum:
+                    - view_started
+                    - marker_detected
+                    - video_started
+                    - video_paused
+                    - video_completed
+                    - video_replayed
+                    - session_ended
+                metadata:
+                  type: object
+                  properties:
+                    userAgent:
+                      type: string
+                    screenResolution:
+                      type: string
+                    timestamp:
+                      type: string
+                      format: date-time
+      responses:
+        '201':
+          description: Событие записано
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /analytics/projects/{projectId}:
+    get:
+      tags: [analytics]
+      summary: Получить аналитику проекта
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [hour, day, week, month]
+            default: day
+      responses:
+        '200':
+          description: Данные аналитики
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analytics'
+
+  /analytics/projects/{projectId}/export:
+    get:
+      tags: [analytics]
+      summary: Экспорт аналитики в CSV
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: CSV файл
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
+  # ==================== ADMIN ====================
+  /admin/users:
+    get:
+      tags: [admin]
+      summary: Получить список всех пользователей (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [user, admin]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список пользователей
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{userId}:
+    patch:
+      tags: [admin]
+      summary: Обновить пользователя (Admin only)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [user, admin]
+                isActive:
+                  type: boolean
+                quota:
+                  $ref: '#/components/schemas/UserQuota'
+      responses:
+        '200':
+          description: Пользователь обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+    delete:
+      tags: [admin]
+      summary: Удалить пользователя (Admin only)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Пользователь удален
+
+  /admin/statistics:
+    get:
+      tags: [admin]
+      summary: Получить общую статистику системы (Admin only)
+      responses:
+        '200':
+          description: Статистика
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalUsers:
+                    type: integer
+                  totalProjects:
+                    type: integer
+                  totalViews:
+                    type: integer
+                  storageUsed:
+                    type: integer
+                    description: Bytes
+                  apiRequests:
+                    type: object
+                    properties:
+                      last24h:
+                        type: integer
+                      last7d:
+                        type: integer
+                  topProjects:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        projectId:
+                          type: string
+                        name:
+                          type: string
+                        views:
+                          type: integer
+
+# ==================== COMPONENTS ====================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ProjectIdParam:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          description: Access token TTL in seconds
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+        role:
+          type: string
+          enum: [user, admin]
+        isActive:
+          type: boolean
+        emailVerified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserQuota:
+      type: object
+      properties:
+        maxProjects:
+          type: integer
+        maxStorageBytes:
+          type: integer
+        maxVideoLengthSeconds:
+          type: integer
+        maxViewsPerMonth:
+          type: integer
+        currentProjects:
+          type: integer
+        currentStorageBytes:
+          type: integer
+        currentViewsThisMonth:
+          type: integer
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        isPublic:
+          type: boolean
+        totalViews:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProjectDetailed:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          properties:
+            images:
+              type: array
+              items:
+                $ref: '#/components/schemas/Image'
+            videos:
+              type: array
+              items:
+                $ref: '#/components/schemas/Video'
+            markers:
+              type: array
+              items:
+                $ref: '#/components/schemas/Marker'
+            links:
+              type: array
+              items:
+                $ref: '#/components/schemas/Link'
+
+    Image:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        filePath:
+          type: string
+        thumbnailPath:
+          type: string
+        originalSize:
+          type: integer
+          description: Bytes
+        width:
+          type: integer
+        height:
+          type: integer
+        format:
+          type: string
+          enum: [jpeg, png]
+        trackingScore:
+          type: number
+          description: Quality score for AR tracking (0-100)
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Video:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        filePath:
+          type: string
+        posterPath:
+          type: string
+          nullable: true
+        originalSize:
+          type: integer
+          description: Bytes
+        processedSize:
+          type: integer
+          description: Bytes
+          nullable: true
+        duration:
+          type: number
+          description: Duration in seconds
+          nullable: true
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+        format:
+          type: string
+        codec:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        autoplay:
+          type: boolean
+        loop:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        processedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    Marker:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        imageId:
+          type: string
+          format: uuid
+        videoId:
+          type: string
+          format: uuid
+          nullable: true
+        markerData:
+          type: string
+          description: Serialized marker features data
+        settings:
+          type: object
+          properties:
+            scale:
+              type: number
+            offsetX:
+              type: number
+            offsetY:
+              type: number
+            rotation:
+              type: number
+            opacity:
+              type: number
+        trackingQuality:
+          type: string
+          enum: [excellent, good, fair, poor]
+        createdAt:
+          type: string
+          format: date-time
+
+    Link:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+          format: uuid
+        markerId:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        slug:
+          type: string
+        isActive:
+          type: boolean
+        hasPassword:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        maxViews:
+          type: integer
+          nullable: true
+        currentViews:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    LinkPublic:
+      type: object
+      properties:
+        id:
+          type: string
+        isActive:
+          type: boolean
+        hasPassword:
+          type: boolean
+        requiresAuth:
+          type: boolean
+        markerData:
+          type: string
+          description: Marker data for AR.js (только если authenticated)
+          nullable: true
+        videoUrl:
+          type: string
+          format: uri
+          nullable: true
+        settings:
+          type: object
+          nullable: true
+
+    Analytics:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        summary:
+          type: object
+          properties:
+            totalViews:
+              type: integer
+            uniqueViewers:
+              type: integer
+            avgWatchTime:
+              type: number
+              description: Seconds
+            completionRate:
+              type: number
+              description: Percentage (0-100)
+            dropOffRate:
+              type: number
+              description: Percentage (0-100)
+        timeline:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              views:
+                type: integer
+              uniqueViewers:
+                type: integer
+        devices:
+          type: object
+          properties:
+            mobile:
+              type: integer
+            desktop:
+              type: integer
+            tablet:
+              type: integer
+        browsers:
+          type: object
+          additionalProperties:
+            type: integer
+        geography:
+          type: array
+          items:
+            type: object
+            properties:
+              country:
+                type: string
+              views:
+                type: integer
+
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Неавторизован
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Доступ запрещен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
