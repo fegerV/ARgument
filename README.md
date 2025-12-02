@@ -25,11 +25,52 @@ ARgument - это платформа для создания интеракти�
 
 ## 📚 Документация
 
+### Основная документация
 - **[TZ.md](./TZ.md)** - Полное техническое задание
 - **[API_SPEC.yaml](./API_SPEC.yaml)** - OpenAPI 3.0 спецификация
 - **[DATABASE_SCHEMA.sql](./DATABASE_SCHEMA.sql)** - Схема базы данных PostgreSQL
 - **[ARCHITECTURE_DIAGRAM.md](./ARCHITECTURE_DIAGRAM.md)** - Диаграммы архитектуры
 - **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Инструкции по развертыванию
+
+### Руководства разработчика
+- **[docs/SETUP_GUIDE.md](./docs/SETUP_GUIDE.md)** - Подробная инструкция по установке
+- **[docs/architecture/OVERVIEW.md](./docs/architecture/OVERVIEW.md)** - Обзор архитектуры
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Руководство по внесению изменений
+
+## 🏗️ Структура проекта
+
+```
+argument/
+├── backend/              # NestJS Backend API
+│   ├── src/
+│   │   ├── modules/      # Feature modules (auth, users, projects, etc.)
+│   │   ├── config/       # Configuration files
+│   │   ├── database/     # Migrations and seeds
+│   │   ├── app.module.ts
+│   │   └── main.ts
+│   ├── Dockerfile
+│   └── package.json
+├── frontend/             # Next.js Frontend Dashboard
+│   ├── src/
+│   │   ├── app/          # App router pages
+│   │   ├── components/   # React components
+│   │   ├── lib/          # Utilities and API client
+│   │   └── hooks/        # Custom React hooks
+│   ├── Dockerfile
+│   └── package.json
+├── shared/               # Shared types and constants
+│   ├── types.ts
+│   ├── constants.ts
+│   └── package.json
+├── docs/                 # Documentation
+│   ├── architecture/
+│   └── SETUP_GUIDE.md
+├── .github/
+│   └── workflows/        # CI/CD workflows
+├── docker-compose.yml    # Docker services configuration
+├── package.json          # Root workspace configuration
+└── README.md
+```
 
 ## 🏗️ Архитектура
 
@@ -83,11 +124,12 @@ ARgument - это платформа для создания интеракти�
 ### Требования
 
 - Node.js 18+
-- PostgreSQL 15+
-- Redis 7+
-- Docker (опционально)
+- npm 9+
+- Docker & Docker Compose (рекомендуется)
+- PostgreSQL 15+ (если не используете Docker)
+- Redis 7+ (если не используете Docker)
 
-### Установка (Local Development)
+### Установка с Docker (Рекомендуется)
 
 1. **Клонировать репозиторий**
 ```bash
@@ -97,72 +139,60 @@ cd argument
 
 2. **Установить зависимости**
 ```bash
-# Backend
-cd backend
-npm install
-
-# Frontend
-cd ../frontend
 npm install
 ```
 
-3. **Настроить environment variables**
-
-Скопировать `.env.example` в `.env` и заполнить:
-
+3. **Запустить все сервисы**
 ```bash
-# Backend
-cp backend/.env.example backend/.env
-
-# Frontend
-cp frontend/.env.example frontend/.env.local
-```
-
-4. **Запустить базы данных (Docker)**
-```bash
-docker-compose -f docker-compose.dev.yml up -d postgres redis minio
-```
-
-5. **Выполнить миграции**
-```bash
-cd backend
-npm run migration:run
-```
-
-6. **Запустить приложение**
-```bash
-# Backend API
-cd backend
-npm run start:dev
-
-# Frontend Dashboard
-cd frontend
-npm run dev
-
-# Workers (в отдельном терминале)
-cd backend
-npm run worker:dev
-```
-
-7. **Открыть браузер**
-- Dashboard: http://localhost:3001
-- API: http://localhost:3000
-- API Docs: http://localhost:3000/api/docs
-
-### Установка (Docker Compose)
-
-```bash
-# Создать .env файл
-cp .env.example .env
-
-# Запустить все сервисы
+# Запустить Docker Compose
 docker-compose up -d
 
 # Выполнить миграции
-docker-compose exec api npm run migration:run
+npm run migration:run
 
-# Просмотр логов
-docker-compose logs -f
+# Заполнить тестовыми данными
+npm run seed
+```
+
+4. **Открыть в браузере**
+- **Frontend Dashboard**: http://localhost:3001
+- **Backend API**: http://localhost:3000/api/v1
+- **API Docs (Swagger)**: http://localhost:3000/api/docs
+- **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin)
+
+5. **Тестовые учетные данные**
+- Admin: `admin@argument.io` / `admin123`
+- User: `user@example.com` / `password123`
+
+### Разработка без Docker
+
+См. подробную инструкцию в [docs/SETUP_GUIDE.md](./docs/SETUP_GUIDE.md)
+
+### Команды для разработки
+
+```bash
+# Запустить backend и frontend одновременно
+npm run dev
+
+# Запустить только backend
+npm run dev:backend
+
+# Запустить только frontend
+npm run dev:frontend
+
+# Сборка проекта
+npm run build
+
+# Запуск линтеров
+npm run lint
+
+# Форматирование кода
+npm run format
+
+# Docker команды
+npm run docker:up      # Запустить контейнеры
+npm run docker:down    # Остановить контейнеры
+npm run docker:logs    # Показать логи
 ```
 
 ## 📖 API Documentation
